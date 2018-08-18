@@ -121,4 +121,46 @@ RSpec.describe ActiveInteraction::Extras::ModelFields do
       expect(result).to eq Date.today
     end
   end
+
+  context 'prefixed fields' do
+    let(:test_prefixed_form) do
+      Class.new(TestableService) do
+        interface :model_a
+        interface :model_b
+
+        model_fields :model_a, default: nil do
+          date :date_field
+        end
+
+        model_fields :model_b, default: nil, prefix: true do
+          date :date_field
+        end
+
+        def execute
+          [date_field, model_b_date_field]
+        end
+      end
+    end
+
+    context 'new object' do
+      it 'prepopulates values' do
+        a = double('A', date_field: Date.today)
+        b = double('B', date_field: Date.today)
+        result = test_prefixed_form.new(model_a: a, model_b: b)
+
+        expect(result.date_field).to eq Date.today
+        expect(result.model_b_date_field).to eq Date.today
+      end
+    end
+
+    it 'prepopulates values' do
+      a = double('A', date_field: Date.today)
+      b = double('B', date_field: Date.today)
+      outcome = test_prefixed_form.run(model_a: a, model_b: b)
+
+      expect(outcome.result).to eq [Date.today, Date.today]
+      expect(outcome.date_field).to eq Date.today
+      expect(outcome.model_b_date_field).to eq Date.today
+    end
+  end
 end

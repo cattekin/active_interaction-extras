@@ -24,9 +24,16 @@ module ActiveInteraction::Extras::ModelFields
   class Context < SimpleDelegator
     attr_accessor :from_model_name
     attr_accessor :model_field_cache
+    attr_accessor :prefix
 
     def custom_filter_attribute(name, opts = {})
       from_model_name = self.from_model_name
+
+      if prefix
+        name = "#{from_model_name}_#{name}".to_sym
+        model_field_cache[from_model_name] = model_field_cache[from_model_name] << :prefix
+      end
+
       model_field_cache[from_model_name] = model_field_cache[from_model_name] << name
 
       __getobj__.send __callee__, name, opts
@@ -56,7 +63,8 @@ module ActiveInteraction::Extras::ModelFields
       value_changed = true
 
       if model_field
-        value_changed = send(model_field).send(field) != send(field)
+        name_on_model = name_on_model(model_field, field)
+        value_changed = send(model_field).send(name_on_model) != send(field)
       end
 
       given?(field) && value_changed
@@ -72,9 +80,19 @@ module ActiveInteraction::Extras::ModelFields
         model_field = self.class.model_field_cache_inverse[name]
         next if model_field.nil?
 
-        value = public_send(model_field)&.public_send(name)
+        name_on_model = name_on_model(model_field, name)
+
+        value = public_send(model_field)&.public_send(name_on_model)
         public_send("#{name}=", filter.clean(value, self))
       end
+    end
+  end
+
+  def name_on_model(model_name, input)
+    if self.class.model_field_cache[model_name].include? :prefix
+      input.to_s.gsub("#{model_name}_", '').to_sym
+    else
+      input
     end
   end
 
@@ -105,10 +123,11 @@ module ActiveInteraction::Extras::ModelFields
     def model_fields(model_name, opts = {}, &block)
       if block
         ref_model_field_cache = model_field_cache
-        opts.reverse_merge!(default: nil, permit: true)
+        opts.reverse_merge!(default: nil, permit: true, prefix: nil)
 
         with_options opts do
           context = Context.new(self)
+          context.prefix = opts[:prefix]
           context.from_model_name = model_name
           context.model_field_cache = ref_model_field_cache
 
